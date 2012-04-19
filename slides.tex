@@ -931,8 +931,8 @@ isIsomorphic :: forall rdf1 rdf2. (RDF rdf1, RDF rdf2) => rdf1 -> rdf2 -> Bool
 
 \begin{lstlisting}[style=MyJavaStyle]
 final public Model readFile(String filename) throws FileNotFoundException {
-        return ModelFactory.createDefaultModel().read(new FileReader("file.rdf"), null);
-    }
+ return ModelFactory.createDefaultModel().read(new FileReader("file.rdf"),null);
+}
 \end{lstlisting}
 
 \bigskip
