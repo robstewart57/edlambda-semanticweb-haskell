@@ -930,12 +930,8 @@ isIsomorphic :: forall rdf1 rdf2. (RDF rdf1, RDF rdf2) => rdf1 -> rdf2 -> Bool
 \textbf{Java}
 
 \begin{lstlisting}[style=MyJavaStyle]
-final public void readFile(String filename) throws FileNotFoundException {
-        Model model = ModelFactory.createDefaultModel();
-        String str = new Scanner(new File("file.rdf")).useDelimiter("Z").next();
-        InputStream is = new ByteArrayInputStream(str.getBytes());
-        BufferedReader br = new BufferedReader(new InputStreamReader(is));
-        model.read(br, null);
+final public Model readFile(String filename) throws FileNotFoundException {
+        return ModelFactory.createDefaultModel().read(new FileReader("file.rdf"), null);
     }
 \end{lstlisting}
 
@@ -1059,10 +1055,12 @@ final public Model mkModel(){
  model.setNsPrefix("foaf", foafNS);
  Property topic_interest = model.createProperty(foafNS, "topic_interest");
  Property account = model.createProperty(foafNS, "account");
+
  Resource me = model.createResource("http://example.org/users/robstewart");
  Resource twitter = model.createResource("https://twitter.com/#!/robstewartUK");
  Resource haskell = model.createResource(
     "http://dbpedia.org/resource/Haskell_(programming_language)");
+
  Statement stmt;
  stmt = model.createStatement(me, account, twitter);
  model.add(stmt);
