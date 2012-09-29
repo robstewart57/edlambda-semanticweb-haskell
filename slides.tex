@@ -8,7 +8,7 @@
 \author{Rob Stewart}
 \institute{Heriot Watt University}
 \title{Towards a Semantic Web Toolkit in Haskell}
-\date{18th April, 2012}
+\date{\emph{Updated: 29th September 2012}}
 \subtitle{Querying RDF graphs \& SPARQL construction}
 
 \newcommand{\hilightyellow}[1]{\colorbox{yellow}{#1}}
@@ -750,24 +750,16 @@ Looking at rdf4h
 
 \begin{itemize}
 \item \textbf{Author} Calvin Smith
-\item \textbf{Maintainers} Alex McCausland; Calvin Smith
+\item \textbf{Maintainer} Rob Stewart
 \item \textbf{Source code}
   
   \begin{itemize}
-  \item Calvin (upstream)
+  \item Rob (upstream)
     
     \begin{itemize}
-    \item \texttt{darcs get
-      http://protempore.net/rdf4h/}
+    \item \texttt{git clone git://github.com/robstewart57/rdf4h.git}
     \end{itemize}
     
-  \item Alex's fork
-    
-    \begin{itemize}
-    \item \texttt{git clone
-      git://github.com/amccausl/RDF4H.git}
-    \end{itemize}
-
   \end{itemize}
 
 \end{itemize}
@@ -818,7 +810,7 @@ Looking at rdf4h
 
 \begin{haskellcode}
 data Triple =
-      Triple {-# UNPACK #-} !Node {-# UNPACK #-} !Node {-# UNPACK #-} !Node
+      Triple !Node !Node !Node
 
 type Triples = [Triple]
 type Subject = Node
@@ -826,18 +818,25 @@ type Predicate = Node
 type Object = Node
 
 data Node =
-  -- |An RDF URI reference
-  UNode {-# UNPACK #-} !FastString
 
-  -- |An RDF blank node
-  | BNode {-# UNPACK #-} !FastString
+  -- |An RDF URI reference. See
+  -- <http://www.w3.org/TR/rdf-concepts/#section-Graph-URIref> for more
+  -- information.
+  UNode !T.Text
 
-  -- |An RDF blank node with an auto-generated identifier,
-  --  as used in Turtle.
-  | BNodeGen  {-# UNPACK #-} !Int
+  -- |An RDF blank node. See
+  -- <http://www.w3.org/TR/rdf-concepts/#section-blank-nodes> for more
+  -- information.
+  | BNode !T.Text
 
-  -- |An RDF literal.
-  | LNode {-# UNPACK #-} !LValue
+  -- |An RDF blank node with an auto-generated identifier, as used in
+  -- Turtle.
+  | BNodeGen !Int
+
+  -- |An RDF literal. See
+  -- <http://www.w3.org/TR/rdf-concepts/#section-Graph-Literal> for more
+  -- information.
+  | LNode !LValue
 \end{haskellcode}
 
 \end{frame}
@@ -895,18 +894,18 @@ class RDF rdf where
 
 \begin{haskellcode}
 -- |Return a URIRef node for the given bytestring URI.
-unode :: ByteString -> Node
+unode :: T.Text -> Node
 
 -- |Return a blank node using the given string identifier.
-bnode :: ByteString ->  Node
+bnode :: T.Text ->  Node
 
 -- |Return a literal node using the given LValue.
 lnode :: LValue ->  Node
 
 -- |Constructor functions for LValue
-plainL :: ByteString -> LValue
-plainLL :: ByteString -> ByteString -> LValue
-typedL :: ByteString -> FastString -> LValue
+plainL :: T.Text -> LValue
+plainLL :: T.Text -> T.Text -> LValue
+typedL :: T.Text -> T.Text-> LValue
 
 -- |A constructor function for 'Triple'
 triple :: Subject -> Predicate -> Object -> Triple
@@ -931,7 +930,7 @@ isIsomorphic :: forall rdf1 rdf2. (RDF rdf1, RDF rdf2) => rdf1 -> rdf2 -> Bool
 
 \begin{lstlisting}[style=MyJavaStyle]
 final public Model readFile(String filename) throws FileNotFoundException {
- return ModelFactory.createDefaultModel().read(new FileReader("file.rdf"),null);
+ return ModelFactory.createDefaultModel().read(new FileReader("file.nt"),null);
 }
 \end{lstlisting}
 
@@ -940,10 +939,7 @@ final public Model readFile(String filename) throws FileNotFoundException {
 
 \begin{haskellcode}
 readRDFFile :: IO TriplesGraph
-readRDFFile = do
-  contents <- readFile "file.rdf"
-  let (Right rdf) = parseXmlRDF Nothing Nothing (B.pack contents)
-  return rdf
+readRDFFile = fmap fromEither (parseFile NTriplesParser "file.nt")
 \end{haskellcode}
 
 \end{frame}
@@ -1189,19 +1185,25 @@ Looking at hsparql
 \textbf{hsparql} includes a SPARQL domain specific language\ldots
 
 \begin{itemize}
-\item To easily create SPARQL queries
+\item Programmatically create SPARQL queries
   
 \item Includes functions for submitting SPARQL queries
   
   \begin{itemize}
-  \item For \texttt{CONSTRUCT} and \texttt{SELECT} queries
+  \item For \texttt{CONSTRUCT, SELECT, DESCRIBE} and \texttt{ASK} queries
   \end{itemize}
   
 \item Includes SPARQL response data structures
   
   \begin{itemize}
-  \item SPARQL Query Solutions (for \texttt{select} queries)
-  \item RDF graphs (for \texttt{construct} queries)
+  \item SPARQL Query Solutions (for \texttt{select} and \texttt{ask} queries)
+  \item RDF graphs (for \texttt{describe} and \texttt{construct}
+    queries)
+
+    \begin{itemize}
+    \item Adopting the types from the `rdf4h' package
+    \end{itemize}
+
   \end{itemize}
 
 \end{itemize}
@@ -1259,13 +1261,10 @@ data QueryType = SelectType | ConstructType | TypeNotSet
 data QueryForm = SelectForm QueryData | ConstructForm QueryData
 
 -- |Local representations of incoming XML results.
-data BindingValue =
-   URI String                   -- ^Absolute reference to remote resource.
-   | Literal String             -- ^Simple literal string.
-   | TypedLiteral String String -- ^Literal element with type resource
-   | LangLiteral String String  -- ^Literal element with language resource
-   | Unbound                    -- ^Unbound result value
+data BindingValue = Bound Data.RDF.Node    -- ^RDF Node (UNode, BNode, LNode)
+                  | Unbound       -- ^Unbound result value
   deriving (Show, Eq)
+
 
 data ConstructQuery = ConstructQuery
     { queryConstructs :: [Pattern] }
@@ -1406,21 +1405,27 @@ selectQuery ep q = do
 \begin{alltt}
 -- |Connect to remote 'EndPoint' and construct 'TriplesGraph' from given
 --  'ConstructQuery' action. /Provisional implementation/.
-constructQuery :: EndPoint -> Query ConstructQuery -> IO TriplesGraph
+constructQuery :: forall rdf. (RDF rdf) =>
+   Database.HSparql.Connection.EndPoint -> Query ConstructQuery -> IO rdf
 constructQuery ep q = do
-    let uri      = ep ++ "?" ++ urlEncodeVars [("query", \hilightyellow{createConstructQuery q})]
-        h1 = mkHeader HdrUserAgent "hsparql-client"
-        h2 = mkHeader HdrAccept \hilightyellow{"text/rdf+n3"}
-        request = Request \{ rqURI = fromJust (parseURI uri)
+    let uri      = ep ++ "?" ++ urlEncodeVars [("query", createConstructQuery q)]
+    rdfGraph <- httpCallForRdf uri
+    case rdfGraph of
+      Left e -> error $ show e
+      Right graph -> return graph
+
+httpCallForRdf :: RDF rdf => String -> IO (Either ParseFailure rdf)
+httpCallForRdf uri = do
+  let h1 = mkHeader HdrUserAgent "hsparql-client"
+      h2 = mkHeader HdrAccept "text/turtle"
+      request = Request { rqURI = fromJust $ parseURI uri
                           , rqHeaders = [h1,h2]
                           , rqMethod = GET
                           , rqBody = ""
-                          \}
-    \hilightyellow{response <- simpleHTTP request >>= getResponseBody}
-    let rdfGraph = \hilightyellow{parseString (TurtleParser Nothing Nothing) (B.pack response)}
-    case rdfGraph of
-     Left e -> error (show e)
-     Right graph -> \hilightyellow{return graph}
+                          }
+  response <- simpleHTTP request >>= getResponseBody
+  let content = E.decodeUtf8 (B.pack response)
+  return \$ parseString (TurtleParser Nothing Nothing) content
 \end{alltt}
 
 \end{frame}
@@ -1432,14 +1437,21 @@ constructQuery ep q = do
 
 \scriptsize
 \begin{verbatim}
--- Here's a SELECT query example
 selectExample :: IO ()
 selectExample = do
   (Just s) <- selectQuery "http://dbpedia.org/sparql" simpleSelect
   putStrLn . take 500 . show $ s
 
+askExample :: IO ()
+askExample = do
+  res <- askQuery "http://dbpedia.org/sparql" simpleAsk
+  putStrLn $ "result: " ++ show (res::Bool)
 
--- Here's a CONSTRUCT query example
+describeExample :: IO ()
+describeExample = do
+  rdfGraph <- describeQuery "http://dbpedia.org/sparql" simpleDescribe
+  mapM_ print (triplesOf rdfGraph)
+
 constructExample :: IO ()
 constructExample = do
   rdfGraph <- constructQuery "http://dbpedia.org/sparql" simpleConstruct
@@ -1689,32 +1701,6 @@ describeQuery :: EndPoint -> Query DescribeQuery -> IO TriplesGraph
 \begin{center}
 The end.
 \end{center}
-
-\end{frame}
-
-
-\begin{frame}
-\frametitle{Next Ed Lambda meetup}
-
-\begin{itemize}
-\item Title: \textbf{Haskell vs. F\# vs. Scala: High-level Language
-Features and Parallelism Support}
-\item Speakers: \emph{Prabhat Totoo, Pantazis Deligiannis \& Hans-Wolfgang Loidl}
-\item When: 7pm - Tuesday 8th May, 2012
-
-\end{itemize}
-
-\textbf{Abstract}
-
-\emph{
-This paper provides a performance and programmability comparison of
-parallel programming support in Haskell, F\# and Scala. Emphasis is given on advanced language features such as purity,
-evaluation order, and integration of functional aspects into
-imperative and object-oriented languages. The expressive power of each
-language is analysed, especially regarding their support for
-parallelism. We quantify parallel performance and assess succinctness
-and modularity of the code.
-}
 
 \end{frame}
 
